@@ -53,6 +53,14 @@ def _pull_and_run_job(portal_url: str, auth: dict, client: LLMClient) -> None:
         sub_job_id = sub_job.get("sub_job_id")
         id_str = f" ({sub_job_id})" if sub_job_id is not None else ""
         typer.echo(f"  [{i}/{len(job['sub_jobs'])}]{id_str} {label}...")
+        try:
+            httpx.post(
+                f"{portal_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/start",
+                headers=auth,
+                timeout=10,
+            )
+        except httpx.RequestError:
+            pass
         prompt = sub_job["prompt"]
         result: dict
 
