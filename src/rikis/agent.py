@@ -2,23 +2,17 @@ import time
 import httpx
 import typer
 from rikis import config
-from rikis.llm import LLMClient
+from rikis.runtimes import Runtime
 
 JOB_POLL_INTERVAL = 15   # seconds
 METRICS_PUSH_INTERVAL = 30  # seconds
 
 
-def run(token: str) -> None:
-    llm_url, model = config.load_llm()
-    if not model:
-        typer.echo("LLM model not configured.", err=True)
-        return
-
-    client = LLMClient(base_url=llm_url, model=model)
+def run(token: str, runtimes: dict[str, Runtime]) -> None:
     portal_url = config.load_portal_url()
     auth = {"Authorization": f"Bearer {token}"}
 
-    typer.echo(f"Agent started. LLM: {model} @ {llm_url}")
+    typer.echo(f"Agent started with {len(runtimes)} runtime(s).")
 
     last_metrics = 0.0
     while True:
@@ -28,12 +22,12 @@ def run(token: str) -> None:
             _push_metrics(portal_url, auth)
             last_metrics = now
 
-        _pull_and_run_job(portal_url, auth, client)
+        _pull_and_run_job(portal_url, auth, runtimes)
 
         time.sleep(JOB_POLL_INTERVAL)
 
 
-def _pull_and_run_job(portal_url: str, auth: dict, client: LLMClient) -> None:
+def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime]) -> None:
     try:
         res = httpx.get(f"{portal_url}/api/jobs", headers=auth, timeout=10)
         res.raise_for_status()
@@ -45,7 +39,20 @@ def _pull_and_run_job(portal_url: str, auth: dict, client: LLMClient) -> None:
     if not job:
         return
 
-    typer.echo(f"Running job {job['id']} ({len(job['sub_jobs'])} sub-jobs)...")
+    runtime_url = job.get("runtime_url")
+    model = job.get("model")
+
+    if not model:
+        typer.echo(f"Job {job['id']}: no model specified, skipping.", err=True)
+        return
+
+    if not runtime_url or runtime_url not in runtimes:
+        typer.echo(f"Job {job['id']}: runtime '{runtime_url}' not available, skipping.", err=True)
+        return
+
+    runtime = runtimes[runtime_url]
+
+    typer.echo(f"Running job {job['id']} ({len(job['sub_jobs'])} sub-jobs) [{model}]...")
     params = job.get("llm_params", {})
 
     for i, sub_job in enumerate(job["sub_jobs"], 1):
@@ -53,6 +60,7 @@ def _pull_and_run_job(portal_url: str, auth: dict, client: LLMClient) -> None:
         sub_job_id = sub_job.get("sub_job_id")
         id_str = f" ({sub_job_id})" if sub_job_id is not None else ""
         typer.echo(f"  [{i}/{len(job['sub_jobs'])}]{id_str} {label}...")
+
         try:
             httpx.post(
                 f"{portal_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/start",
@@ -61,12 +69,14 @@ def _pull_and_run_job(portal_url: str, auth: dict, client: LLMClient) -> None:
             )
         except httpx.RequestError:
             pass
+
         prompt = sub_job["prompt"]
         result: dict
 
         try:
-            llm_result = client.run_prompt(
+            llm_result = runtime.run_prompt(
                 prompt,
+                model,
                 temperature=params.get("temperature"),
                 no_think=params.get("no_think", False),
             )
@@ -95,7 +105,7 @@ def _pull_and_run_job(portal_url: str, auth: dict, client: LLMClient) -> None:
             typer.echo(f"Warning: could not submit result for sub-job {sub_job['id']}: {e}", err=True)
 
         if result["status"] == "ok":
-            typer.echo(f"  sub-job {sub_job['id']}: {result['status']} | {result['tokens_generated']} tokens | {result['tokens_per_second']:.1f} tok/s | ttft={result['ttft_seconds']:.2f}s")
+            typer.echo(f"  sub-job {sub_job['id']}: ok | {result['tokens_generated']} tokens | {result['tokens_per_second']:.1f} tok/s | ttft={result['ttft_seconds']:.2f}s")
             typer.echo(f"    response: {result['response'][:200]}")
         else:
             typer.echo(f"  sub-job {sub_job['id']}: {result['status']}")
