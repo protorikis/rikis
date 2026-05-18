@@ -26,10 +26,13 @@ class Runtime(ABC):
     @abstractmethod
     def run_prompt(self, prompt: str, model: str, *, temperature: float | None = None, no_think: bool = False) -> LLMResult: ...
 
-    def _openai_stream(self, prompt: str, model: str, *, temperature: float | None = None, no_think: bool = False) -> LLMResult:
+    def _openai_stream(self, prompt: str, model: str, *, temperature: float | None = None, no_think: bool = False, extra_messages: list | None = None) -> LLMResult:
+        messages = [{"role": "user", "content": prompt}]
+        if extra_messages:
+            messages += extra_messages
         payload: dict = {
             "model": model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "stream": True,
         }
         if no_think:

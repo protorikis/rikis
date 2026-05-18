@@ -9,4 +9,5 @@ class LMStudioRuntime(Runtime):
         return [m["id"] for m in resp.json().get("data", [])]
 
     def run_prompt(self, prompt: str, model: str, *, temperature: float | None = None, no_think: bool = False) -> LLMResult:
-        return self._openai_stream(prompt, model, temperature=temperature, no_think=no_think)
+        extra_messages = [{"role": "assistant", "content": "<think>\n</think>"}] if no_think else None
+        return self._openai_stream(prompt, model, temperature=temperature, no_think=no_think, extra_messages=extra_messages)
