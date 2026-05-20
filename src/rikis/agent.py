@@ -62,11 +62,14 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
         typer.echo(f"  [{i}/{len(job['sub_jobs'])}]{id_str} {label}...")
 
         try:
-            httpx.post(
+            start_res = httpx.post(
                 f"{portal_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/start",
                 headers=auth,
                 timeout=10,
             )
+            if start_res.json().get("cancelled"):
+                typer.echo(f"  job {job['id']} cancelled, stopping.")
+                break
         except httpx.RequestError:
             pass
 
