@@ -8,14 +8,20 @@ app = typer.Typer()
 
 
 @app.command()
-def login(token: str = typer.Option(..., help="Token generated from the Bench Portal")):
+def login(
+    token: str = typer.Option(..., help="Token generated from the Bench Portal"),
+    name: str = typer.Option(None, "--name", help="Display name for this endpoint"),
+):
     """Authenticate this machine with the Bench Portal."""
     portal_url = config.load_portal_url()
     hostname = socket.gethostname()
+    payload: dict = {"token": token, "hostname": hostname}
+    if name:
+        payload["name"] = name
     try:
         res = httpx.post(
             f"{portal_url}/api/endpoints/register",
-            json={"token": token, "hostname": hostname},
+            json=payload,
         )
         if res.status_code != 200:
             typer.echo("Invalid token. Please generate a new one from the Bench Portal.", err=True)
