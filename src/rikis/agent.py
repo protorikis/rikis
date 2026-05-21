@@ -72,9 +72,14 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
             )
             if not start_res.is_success:
                 typer.echo(f"  Error: {start_res.status_code}", err=True)
-            elif start_res.json().get("cancelled"):
-                typer.echo(f"  job {job['id']} cancelled, stopping.")
-                break
+            else:
+                match start_res.json().get("status"):
+                    case "job_cancelled":
+                        typer.echo(f"  job {job['id']} cancelled, stopping")
+                        break
+                    case "skipped":
+                        typer.echo(f"  sub-job {sub_job['id']}: skipped")
+                        continue
         except httpx.RequestError:
             pass
 
