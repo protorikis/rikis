@@ -29,7 +29,7 @@ def run(token: str, runtimes: dict[str, Runtime]) -> None:
 
 def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime]) -> None:
     try:
-        res = httpx.get(f"{portal_url}/api/jobs", headers=auth, timeout=10)
+        res = httpx.post(f"{portal_url}/api/jobs/next", headers=auth, timeout=10)
         res.raise_for_status()
     except httpx.RequestError:
         typer.echo("Warning: could not reach portal.", err=True)
@@ -56,6 +56,8 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
     params = job.get("llm_params", {})
 
     for i, sub_job in enumerate(job["sub_jobs"], 1):
+        if sub_job.get("status") != "pending":
+            continue
         label = sub_job.get("prompt_label") or sub_job["id"]
         sub_job_id = sub_job.get("sub_job_id")
         id_str = f" ({sub_job_id})" if sub_job_id is not None else ""
@@ -67,7 +69,9 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
                 headers=auth,
                 timeout=10,
             )
-            if start_res.json().get("cancelled"):
+            if not start_res.is_success:
+                typer.echo(f"  Error: {start_res.status_code}", err=True)
+            elif start_res.json().get("cancelled"):
                 typer.echo(f"  job {job['id']} cancelled, stopping.")
                 break
         except httpx.RequestError:
@@ -109,7 +113,6 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
 
         if result["status"] == "ok":
             typer.echo(f"  sub-job {sub_job['id']}: ok | {result['tokens_generated']} tokens | {result['tokens_per_second']:.1f} tok/s | ttft={result['ttft_seconds']:.2f}s")
-            typer.echo(f"    response: {result['response'][:200]}")
         else:
             typer.echo(f"  sub-job {sub_job['id']}: {result['status']}")
 
