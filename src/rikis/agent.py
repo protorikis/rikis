@@ -22,33 +22,34 @@ def run(token: str, runtimes: dict[str, Runtime]) -> None:
             _push_metrics(portal_url, auth)
             last_metrics = now
 
-        _pull_and_run_job(portal_url, auth, runtimes)
+        ran = _pull_and_run_job(portal_url, auth, runtimes)
 
-        time.sleep(JOB_POLL_INTERVAL)
+        if not ran:
+            time.sleep(JOB_POLL_INTERVAL)
 
 
-def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime]) -> None:
+def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime]) -> bool:
     try:
         res = httpx.post(f"{portal_url}/api/jobs/next", headers=auth, timeout=10)
         res.raise_for_status()
     except httpx.RequestError:
         typer.echo("Warning: could not reach portal.", err=True)
-        return
+        return False
 
     job = res.json()
     if not job:
-        return
+        return False
 
     runtime_url = job.get("runtime_url")
     model = job.get("model")
 
     if not model:
         typer.echo(f"Job {job['id']}: no model specified, skipping.", err=True)
-        return
+        return False
 
     if not runtime_url or runtime_url not in runtimes:
         typer.echo(f"Job {job['id']}: runtime '{runtime_url}' not available, skipping.", err=True)
-        return
+        return False
 
     runtime = runtimes[runtime_url]
 
@@ -115,6 +116,8 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
             typer.echo(f"  sub-job {sub_job['id']}: ok | {result['tokens_generated']} tokens | {result['tokens_per_second']:.1f} tok/s | ttft={result['ttft_seconds']:.2f}s")
         else:
             typer.echo(f"  sub-job {sub_job['id']}: {result['status']}")
+
+    return True
 
 
 def _push_metrics(portal_url: str, auth: dict) -> None:
