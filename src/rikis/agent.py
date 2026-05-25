@@ -55,6 +55,8 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
 
     typer.echo(f"Running job {job['id']} ({len(job['sub_jobs'])} sub-jobs) [{model}]...")
     params = job.get("llm_params", {})
+    multi_turn = params.get("multi_turn", False) or params.get("preserve_thinking", False)
+    history: list = []
 
     for i, sub_job in enumerate(job["sub_jobs"], 1):
         if sub_job.get("status") != "pending":
@@ -92,6 +94,8 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
                 model,
                 temperature=params.get("temperature"),
                 no_think=params.get("no_think", False),
+                preserve_thinking=params.get("preserve_thinking"),
+                history=history if multi_turn else None,
             )
             result = {
                 "status": "ok",
@@ -106,6 +110,13 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
         except Exception as e:
             typer.echo(f"  sub-job {sub_job['id']} error: {e}", err=True)
             result = {"status": "error", "error": str(e)}
+
+        if multi_turn:
+            reasoning = result.get("reasoning") or ""
+            response = result.get("response") or ""
+            assistant_content = f"<think>\n{reasoning}\n</think>\n\n{response}" if params.get("preserve_thinking") and reasoning else response
+            history.append({"role": "user", "content": prompt})
+            history.append({"role": "assistant", "content": assistant_content})
 
         try:
             httpx.post(

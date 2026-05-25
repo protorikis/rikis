@@ -24,10 +24,10 @@ class Runtime(ABC):
     def list_models(self) -> list[str]: ...
 
     @abstractmethod
-    def run_prompt(self, prompt: str, model: str, *, temperature: float | None = None, no_think: bool = False) -> LLMResult: ...
+    def run_prompt(self, prompt: str, model: str, *, temperature: float | None = None, no_think: bool = False, preserve_thinking: bool | None = None, history: list | None = None) -> LLMResult: ...
 
-    def _openai_stream(self, prompt: str, model: str, *, temperature: float | None = None, no_think: bool = False, extra_messages: list | None = None) -> LLMResult:
-        messages = [{"role": "user", "content": prompt}]
+    def _openai_stream(self, prompt: str, model: str, *, temperature: float | None = None, no_think: bool = False, preserve_thinking: bool | None = None, history: list | None = None, extra_messages: list | None = None) -> LLMResult:
+        messages = (history or []) + [{"role": "user", "content": prompt}]
         if extra_messages:
             messages += extra_messages
         payload: dict = {
@@ -35,9 +35,14 @@ class Runtime(ABC):
             "messages": messages,
             "stream": True,
         }
+        chat_template_kwargs: dict = {}
         if no_think:
-            payload["chat_template_kwargs"] = {"enable_thinking": False}
+            chat_template_kwargs["enable_thinking"] = False
             payload["reasoning_effort"] = "none"
+        if preserve_thinking:
+            chat_template_kwargs["preserve_thinking"] = True
+        if chat_template_kwargs:
+            payload["chat_template_kwargs"] = chat_template_kwargs
         if temperature is not None:
             payload["temperature"] = temperature
 
