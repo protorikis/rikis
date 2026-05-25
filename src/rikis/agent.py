@@ -93,7 +93,7 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
                 prompt,
                 model,
                 temperature=params.get("temperature"),
-                no_think=params.get("no_think", False),
+                thinking=params.get("thinking", True),
                 preserve_thinking=params.get("preserve_thinking"),
                 history=history if multi_turn else None,
             )

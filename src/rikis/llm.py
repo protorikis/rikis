@@ -25,14 +25,14 @@ class LLMClient:
         prompt: str,
         *,
         temperature: float | None = None,
-        no_think: bool = False,
+        thinking: bool = True,
     ) -> LLMResult:
         payload: dict = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
             "stream": True,
         }
-        if no_think:
+        if not thinking:
             payload["chat_template_kwargs"] = {"enable_thinking": False}
             payload["reasoning_effort"] = "none"
         if temperature is not None:

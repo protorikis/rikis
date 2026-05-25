@@ -24,9 +24,9 @@ class Runtime(ABC):
     def list_models(self) -> list[str]: ...
 
     @abstractmethod
-    def run_prompt(self, prompt: str, model: str, *, temperature: float | None = None, no_think: bool = False, preserve_thinking: bool | None = None, history: list | None = None) -> LLMResult: ...
+    def run_prompt(self, prompt: str, model: str, *, temperature: float | None = None, thinking: bool = True, preserve_thinking: bool | None = None, history: list | None = None) -> LLMResult: ...
 
-    def _openai_stream(self, prompt: str, model: str, *, temperature: float | None = None, no_think: bool = False, preserve_thinking: bool | None = None, history: list | None = None, extra_messages: list | None = None) -> LLMResult:
+    def _openai_stream(self, prompt: str, model: str, *, temperature: float | None = None, thinking: bool = True, preserve_thinking: bool | None = None, history: list | None = None, extra_messages: list | None = None) -> LLMResult:
         messages = (history or []) + [{"role": "user", "content": prompt}]
         if extra_messages:
             messages += extra_messages
@@ -36,7 +36,7 @@ class Runtime(ABC):
             "stream": True,
         }
         chat_template_kwargs: dict = {}
-        if no_think:
+        if not thinking:
             chat_template_kwargs["enable_thinking"] = False
             payload["reasoning_effort"] = "none"
         if preserve_thinking:
