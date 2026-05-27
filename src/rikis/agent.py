@@ -12,7 +12,7 @@ def run(token: str, runtimes: dict[str, Runtime]) -> None:
     portal_url = config.load_portal_url()
     auth = {"Authorization": f"Bearer {token}"}
 
-    typer.echo(f"Agent started with {len(runtimes)} runtime(s).")
+    typer.echo(f"Agent started with {len(runtimes)} runtime(s)")
 
     last_metrics = 0.0
     while True:
@@ -33,7 +33,7 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
         res = httpx.post(f"{portal_url}/api/jobs/next", headers=auth, timeout=10)
         res.raise_for_status()
     except httpx.RequestError:
-        typer.echo("Warning: could not reach portal.", err=True)
+        typer.echo("Error: could not reach portal.", err=True)
         return False
 
     job = res.json()
@@ -53,7 +53,7 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
 
     runtime = runtimes[runtime_url]
 
-    typer.echo(f"Running job {job['id']} ({len(job['sub_jobs'])} sub-jobs) [{model}]...")
+    typer.echo(f"Running job {job['id']} ({len(job['sub_jobs'])} sub-jobs) [{model}]")
     params = job.get("llm_params", {})
     multi_turn = params.get("multi_turn", False) or params.get("preserve_thinking", False)
     history: list = []
@@ -64,7 +64,7 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
         label = sub_job.get("prompt_label") or sub_job["id"]
         sub_job_id = sub_job.get("sub_job_id")
         id_str = f" ({sub_job_id})" if sub_job_id is not None else ""
-        typer.echo(f"  [{i}/{len(job['sub_jobs'])}]{id_str} {label}...")
+        typer.echo(f"  [{i}/{len(job['sub_jobs'])}]{id_str} {label}")
 
         try:
             start_res = httpx.post(
@@ -74,6 +74,7 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
             )
             if not start_res.is_success:
                 typer.echo(f"  Error: {start_res.status_code}", err=True)
+                continue
             else:
                 match start_res.json().get("status"):
                     case "job_cancelled":
@@ -99,13 +100,13 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
             )
             result = {
                 "status": "ok",
-                "response": llm_result.response,
+                "error": None,
                 "reasoning": llm_result.reasoning,
+                "response": llm_result.response,
                 "ttft_seconds": llm_result.ttft_seconds,
                 "generation_seconds": llm_result.generation_seconds,
                 "tokens_generated": llm_result.tokens_generated,
                 "tokens_per_second": llm_result.tokens_per_second,
-                "error": None,
             }
         except Exception as e:
             typer.echo(f"  sub-job {sub_job['id']} error: {e}", err=True)
@@ -126,7 +127,7 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
                 timeout=10,
             )
         except httpx.RequestError as e:
-            typer.echo(f"Warning: could not submit result for sub-job {sub_job['id']}: {e}", err=True)
+            typer.echo(f"Error: could not submit result for sub-job {sub_job['id']}: {e}", err=True)
 
         if result["status"] == "ok":
             typer.echo(f"  sub-job {sub_job['id']}: ok | {result['tokens_generated']} tokens | {result['tokens_per_second']:.1f} tok/s | ttft={result['ttft_seconds']:.2f}s")
