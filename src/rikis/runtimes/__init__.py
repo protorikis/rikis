@@ -1,12 +1,12 @@
 from rikis.runtimes.base import Runtime, LLMResult
-from rikis.runtimes.ollama import OllamaRuntime
 from rikis.runtimes.llama_cpp import LlamaCppRuntime
 from rikis.runtimes.lmstudio import LMStudioRuntime
+from rikis.runtimes.ollama import OllamaRuntime
 
 RUNTIME_TYPES: dict[str, type[Runtime]] = {
-    "ollama": OllamaRuntime,
     "llama.cpp": LlamaCppRuntime,
     "lmstudio": LMStudioRuntime,
+    "ollama": OllamaRuntime,
 }
 
 

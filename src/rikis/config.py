@@ -3,7 +3,7 @@ from pathlib import Path
 
 CONFIG_PATH = Path.home() / ".rikis" / "config.json"
 
-DEFAULT_PORTAL_URL = "http://localhost:8000"
+DEFAULT_SERVER_URL = "https://bench.protorikis.com"
 
 
 def save_token(token: str) -> None:
@@ -14,8 +14,8 @@ def load_token() -> str | None:
     return _load_raw().get("token")
 
 
-def load_portal_url() -> str:
-    return _load_raw().get("portal_url", DEFAULT_PORTAL_URL)
+def load_server_url() -> str:
+    return _load_raw().get("server_url", DEFAULT_SERVER_URL)
 
 
 def add_runtime(type: str, url: str) -> None:
@@ -23,6 +23,16 @@ def add_runtime(type: str, url: str) -> None:
     runtimes = [r for r in data.get("runtimes", []) if r["url"] != url]
     runtimes.append({"type": type, "url": url})
     _save({"runtimes": runtimes})
+
+
+def remove_runtime(url: str) -> bool:
+    data = _load_raw()
+    runtimes = data.get("runtimes", [])
+    filtered = [r for r in runtimes if r["url"] != url]
+    if len(filtered) == len(runtimes):
+        return False
+    _save({"runtimes": filtered})
+    return True
 
 
 def load_runtimes() -> list[dict]:

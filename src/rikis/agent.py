@@ -5,35 +5,34 @@ from rikis import config
 from rikis.runtimes import Runtime
 
 JOB_POLL_INTERVAL = 15   # seconds
-METRICS_PUSH_INTERVAL = 30  # seconds
-
 
 def run(token: str, runtimes: dict[str, Runtime]) -> None:
-    portal_url = config.load_portal_url()
+    server_url = config.load_server_url()
     auth = {"Authorization": f"Bearer {token}"}
 
-    typer.echo(f"Agent started with {len(runtimes)} runtime(s)")
-
-    last_metrics = 0.0
+    waiting = False
     while True:
-        now = time.time()
-
-        if now - last_metrics >= METRICS_PUSH_INTERVAL:
-            _push_metrics(portal_url, auth)
-            last_metrics = now
-
-        ran = _pull_and_run_job(portal_url, auth, runtimes)
-
+        ran = _pull_and_run_job(server_url, auth, runtimes)
         if not ran:
+            if not waiting:
+                typer.echo("Waiting for jobs...")
+                waiting = True
             time.sleep(JOB_POLL_INTERVAL)
+        else:
+            waiting = False
 
 
-def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime]) -> bool:
+def _pull_and_run_job(server_url: str, auth: dict, runtimes: dict[str, Runtime]) -> bool:
     try:
-        res = httpx.post(f"{portal_url}/api/jobs/next", headers=auth, timeout=10)
-        res.raise_for_status()
-    except httpx.RequestError:
-        typer.echo("Error: could not reach portal.", err=True)
+        res = httpx.post(f"{server_url}/api/jobs/next", headers=auth, timeout=10)
+    except httpx.RequestError as e:
+        typer.echo(f"Error: could not reach server: {e}. Retrying in {JOB_POLL_INTERVAL}s...", err=True)
+        return False
+    if res.status_code == 401:
+        typer.echo("Error: authentication failed. Re-run: rikis login --token <token>", err=True)
+        raise typer.Exit(1)
+    if not res.is_success:
+        typer.echo(f"Error: server returned {res.status_code}. Retrying in {JOB_POLL_INTERVAL}s...", err=True)
         return False
 
     job = res.json()
@@ -68,7 +67,7 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
 
         try:
             start_res = httpx.post(
-                f"{portal_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/start",
+                f"{server_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/start",
                 headers=auth,
                 timeout=10,
             )
@@ -83,8 +82,9 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
                     case "skipped":
                         typer.echo(f"  sub-job {sub_job['id']}: skipped")
                         continue
-        except httpx.RequestError:
-            pass
+        except httpx.RequestError as e:
+            typer.echo(f"  Error: could not reach server on sub-job start: {e}", err=True)
+            continue
 
         prompt = sub_job["prompt"]
         result: dict
@@ -121,7 +121,7 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
 
         try:
             httpx.post(
-                f"{portal_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/result",
+                f"{server_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/result",
                 json=result,
                 headers=auth,
                 timeout=10,
@@ -131,15 +131,5 @@ def _pull_and_run_job(portal_url: str, auth: dict, runtimes: dict[str, Runtime])
 
         if result["status"] == "ok":
             typer.echo(f"  sub-job {sub_job['id']}: ok | {result['tokens_generated']} tokens | {result['tokens_per_second']:.1f} tok/s | ttft={result['ttft_seconds']:.2f}s")
-        else:
-            typer.echo(f"  sub-job {sub_job['id']}: {result['status']}")
 
     return True
-
-
-def _push_metrics(portal_url: str, auth: dict) -> None:
-    # TODO: collect real system/model metrics
-    try:
-        httpx.post(f"{portal_url}/api/metrics", json={"placeholder": True}, headers=auth, timeout=10)
-    except httpx.RequestError:
-        typer.echo("Warning: could not push metrics.", err=True)
