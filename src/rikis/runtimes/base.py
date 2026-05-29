@@ -1,3 +1,6 @@
+# Copyright 2026 Protorikis
+# SPDX-License-Identifier: Apache-2.0
+
 import json
 import time
 from abc import ABC, abstractmethod

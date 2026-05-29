@@ -1,3 +1,6 @@
+# Copyright 2026 Protorikis
+# SPDX-License-Identifier: Apache-2.0
+
 import socket
 import httpx
 import typer
@@ -9,10 +12,10 @@ app = typer.Typer()
 
 @app.command()
 def login(
-    token: str = typer.Option(..., help="Token generated from the Bench Portal"),
+    token: str = typer.Option(..., help="Token generated from Protorikis Bench"),
     name: str = typer.Option(None, "--name", help="Display name for this endpoint"),
 ):
-    """Authenticate this machine with the Bench Portal."""
+    """Authenticate this machine with Protorikis Bench."""
     server_url = cfg.load_server_url()
     hostname = socket.gethostname()
     payload: dict = {"token": token, "hostname": hostname}
@@ -25,7 +28,7 @@ def login(
             timeout=60,
         )
         if res.status_code != 200:
-            typer.echo("Invalid token. Please generate a new one from the Bench Portal.", err=True)
+            typer.echo("Invalid token. Please generate a new one from Protorikis Bench.", err=True)
             raise typer.Exit(1)
     except httpx.RequestError:
         typer.echo(f"Could not reach server at {server_url}. Is the backend accessible?", err=True)

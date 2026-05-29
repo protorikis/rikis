@@ -1,3 +1,6 @@
+# Copyright 2026 Protorikis
+# SPDX-License-Identifier: Apache-2.0
+
 from rikis.runtimes.base import Runtime, LLMResult
 from rikis.runtimes.llama_cpp import LlamaCppRuntime
 from rikis.runtimes.lmstudio import LMStudioRuntime

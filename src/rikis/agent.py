@@ -1,3 +1,6 @@
+# Copyright 2026 Protorikis
+# SPDX-License-Identifier: Apache-2.0
+
 import time
 import httpx
 import typer
