@@ -76,6 +76,11 @@ def _pull_and_run_job(server_url: str, auth: dict, runtimes: dict[str, Runtime])
             )
             if not start_res.is_success:
                 typer.echo(f"  Error: {start_res.status_code}", err=True)
+                if start_res.status_code == 404:
+                    job_res = httpx.get(f"{server_url}/api/jobs/{job['id']}", headers=auth, timeout=10)
+                    if not job_res.is_success:
+                        typer.echo(f"  job {job['id']} no longer exists, aborting", err=True)
+                        break
                 continue
             else:
                 match start_res.json().get("status"):
