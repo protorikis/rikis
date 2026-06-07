@@ -7,7 +7,31 @@ import typer
 from rikis import config
 from rikis.runtimes import Runtime
 
-JOB_POLL_INTERVAL = 15   # seconds
+JOB_POLL_INTERVAL = 15  # seconds between job polls
+RETRY_DELAY = 5         # seconds between retries for transient errors
+
+
+def _post_with_retry(url: str, label: str, delay: int = RETRY_DELAY, **kwargs) -> httpx.Response | None:
+    """POST with one retry on failure. Returns the response (check is_success) or None on network error."""
+    last_res: httpx.Response | None = None
+    for attempt in range(2):
+        try:
+            res = httpx.post(url, **kwargs)
+            if res.is_success:
+                return res
+            last_res = res
+            if res.status_code < 500:
+                typer.echo(f"  Error: {label}: {res.status_code}", err=True)
+                return res
+            suffix = f"Retrying in {delay}s..." if attempt == 0 else "Giving up."
+            typer.echo(f"  Error: {label}: {res.status_code}. {suffix}", err=True)
+        except httpx.RequestError as e:
+            suffix = f"Retrying in {delay}s..." if attempt == 0 else "Giving up."
+            typer.echo(f"  Error: {label}: {e}. {suffix}", err=True)
+        if attempt == 0:
+            time.sleep(delay)
+    return last_res
+
 
 def run(token: str, runtimes: dict[str, Runtime]) -> None:
     server_url = config.load_server_url()
@@ -68,31 +92,23 @@ def _pull_and_run_job(server_url: str, auth: dict, runtimes: dict[str, Runtime])
         id_str = f" ({sub_job_id})" if sub_job_id is not None else ""
         typer.echo(f"  [{i}/{len(job['sub_jobs'])}]{id_str} {label}")
 
-        try:
-            start_res = httpx.post(
-                f"{server_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/start",
-                headers=auth,
-                timeout=10,
-            )
-            if not start_res.is_success:
-                typer.echo(f"  Error: {start_res.status_code}", err=True)
-                if start_res.status_code == 404:
-                    job_res = httpx.get(f"{server_url}/api/jobs/{job['id']}", headers=auth, timeout=10)
-                    if not job_res.is_success:
-                        typer.echo(f"  job {job['id']} no longer exists, aborting", err=True)
-                        break
+        start_res = _post_with_retry(
+            f"{server_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/start",
+            label="could not start sub-job", headers=auth, timeout=10,
+        )
+        if start_res is None or not start_res.is_success:
+            if start_res and start_res.status_code == 404:
+                job_res = httpx.get(f"{server_url}/api/jobs/{job['id']}", headers=auth, timeout=10)
+                if not job_res.is_success:
+                    typer.echo(f"  job {job['id']} no longer exists, aborting", err=True)
+            break
+        match start_res.json().get("status"):
+            case "job_cancelled":
+                typer.echo(f"  job {job['id']} cancelled, stopping")
+                break
+            case "skipped":
+                typer.echo(f"  sub-job {sub_job['id']}: skipped")
                 continue
-            else:
-                match start_res.json().get("status"):
-                    case "job_cancelled":
-                        typer.echo(f"  job {job['id']} cancelled, stopping")
-                        break
-                    case "skipped":
-                        typer.echo(f"  sub-job {sub_job['id']}: skipped")
-                        continue
-        except httpx.RequestError as e:
-            typer.echo(f"  Error: could not reach server on sub-job start: {e}", err=True)
-            continue
 
         prompt = sub_job["prompt"]
         result: dict
@@ -127,15 +143,14 @@ def _pull_and_run_job(server_url: str, auth: dict, runtimes: dict[str, Runtime])
             history.append({"role": "user", "content": prompt})
             history.append({"role": "assistant", "content": assistant_content})
 
-        try:
-            httpx.post(
-                f"{server_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/result",
-                json=result,
-                headers=auth,
-                timeout=10,
-            )
-        except httpx.RequestError as e:
-            typer.echo(f"Error: could not submit result for sub-job {sub_job['id']}: {e}", err=True)
+        result_res = _post_with_retry(
+            f"{server_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/result",
+            label="could not submit result", json=result, headers=auth, timeout=10,
+        )
+        if result_res is None or not result_res.is_success:
+            if result_res and result_res.status_code == 404:
+                typer.echo(f"  sub-job {sub_job['id']} no longer exists, aborting", err=True)
+            break
 
         if result["status"] == "ok":
             typer.echo(f"  sub-job {sub_job['id']}: ok | {result['tokens_generated']} tokens | {result['tokens_per_second']:.1f} tok/s | ttft={result['ttft_seconds']:.2f}s")
