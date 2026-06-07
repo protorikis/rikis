@@ -94,9 +94,12 @@ def start():
     auth = {"Authorization": f"Bearer {token}"}
     server_url = cfg.load_server_url()
     try:
-        httpx.post(f"{server_url}/api/endpoints/runtimes", json={"runtimes": profiles}, headers=auth, timeout=10)
+        res = httpx.post(f"{server_url}/api/endpoints/runtimes", json={"runtimes": profiles}, headers=auth, timeout=10)
+        if not res.is_success:
+            detail = res.json().get("detail", res.text) if res.headers.get("content-type", "").startswith("application/json") else res.text
+            typer.echo(f"Error: server rejected runtime profiles: {detail}", err=True)
     except httpx.RequestError:
-        typer.echo("Warning: could not push runtime profiles to server.", err=True)
+        typer.echo("Error: could not push runtime profiles to server.", err=True)
 
     agent.run(token, runtimes)
 
