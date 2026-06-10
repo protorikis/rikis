@@ -14,7 +14,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://bench.protorikis.com"
+Homepage = "https://www.protorikis.com"
+Source = "https://github.com/protorikis/rikis"
 
 [project.scripts]
 rikis = "rikis:main"
