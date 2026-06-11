@@ -5,6 +5,7 @@ import socket
 import httpx
 import typer
 from rikis import config as cfg, agent
+from rikis.client import create_client, get_detail
 from rikis.runtimes import create_runtime, RUNTIME_TYPES
 
 app = typer.Typer()
@@ -22,13 +23,9 @@ def login(
     if name:
         payload["name"] = name
     try:
-        res = httpx.post(
-            f"{server_url}/api/endpoints/register",
-            json=payload,
-            timeout=60,
-        )
-        if res.status_code != 200:
-            typer.echo("Invalid token. Please generate a new one from Protorikis Bench.", err=True)
+        res = create_client().post(f"{server_url}/api/endpoints/register", json=payload, timeout=60)
+        if not res.is_success:
+            typer.echo(f"Error: {get_detail(res)}", err=True)
             raise typer.Exit(1)
     except httpx.RequestError:
         typer.echo(f"Could not reach server at {server_url}. Is the backend accessible?", err=True)
@@ -91,17 +88,16 @@ def start():
             profiles.append({"type": rc["type"], "url": rc["url"], "models": []})
             typer.echo(f"  {rc['type']} @ {rc['url']}: unreachable ({e})")
 
-    auth = {"Authorization": f"Bearer {token}"}
     server_url = cfg.load_server_url()
+    client = create_client(token)
     try:
-        res = httpx.post(f"{server_url}/api/endpoints/runtimes", json={"runtimes": profiles}, headers=auth, timeout=10)
+        res = client.post(f"{server_url}/api/endpoints/runtimes", json={"runtimes": profiles}, timeout=10)
         if not res.is_success:
-            detail = res.json().get("detail", res.text) if res.headers.get("content-type", "").startswith("application/json") else res.text
-            typer.echo(f"Error: server rejected runtime profiles: {detail}", err=True)
+            typer.echo(f"Error: server rejected runtime profiles: {get_detail(res)}", err=True)
     except httpx.RequestError:
         typer.echo("Error: could not push runtime profiles to server.", err=True)
 
-    agent.run(token, runtimes)
+    agent.run(client, runtimes)
 
 
 @app.command()

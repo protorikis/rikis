@@ -5,18 +5,19 @@ import time
 import httpx
 import typer
 from rikis import config
+from rikis.client import get_detail
 from rikis.runtimes import Runtime
 
 JOB_POLL_INTERVAL = 15  # seconds between job polls
 RETRY_DELAY = 5         # seconds between retries for transient errors
 
 
-def _post_with_retry(url: str, label: str, delay: int = RETRY_DELAY, **kwargs) -> httpx.Response | None:
+def _post_with_retry(client: httpx.Client, url: str, label: str, delay: int = RETRY_DELAY, **kwargs) -> httpx.Response | None:
     """POST with one retry on failure. Returns the response (check is_success) or None on network error."""
     last_res: httpx.Response | None = None
     for attempt in range(2):
         try:
-            res = httpx.post(url, **kwargs)
+            res = client.post(url, **kwargs)
             if res.is_success:
                 return res
             last_res = res
@@ -33,13 +34,12 @@ def _post_with_retry(url: str, label: str, delay: int = RETRY_DELAY, **kwargs) -
     return last_res
 
 
-def run(token: str, runtimes: dict[str, Runtime]) -> None:
+def run(client: httpx.Client, runtimes: dict[str, Runtime]) -> None:
     server_url = config.load_server_url()
-    auth = {"Authorization": f"Bearer {token}"}
 
     waiting = False
     while True:
-        ran = _pull_and_run_job(server_url, auth, runtimes)
+        ran = _pull_and_run_job(client, server_url, runtimes)
         if not ran:
             if not waiting:
                 typer.echo("Waiting for jobs...")
@@ -49,14 +49,17 @@ def run(token: str, runtimes: dict[str, Runtime]) -> None:
             waiting = False
 
 
-def _pull_and_run_job(server_url: str, auth: dict, runtimes: dict[str, Runtime]) -> bool:
+def _pull_and_run_job(client: httpx.Client, server_url: str, runtimes: dict[str, Runtime]) -> bool:
     try:
-        res = httpx.post(f"{server_url}/api/jobs/next", headers=auth, timeout=10)
+        res = client.post(f"{server_url}/api/jobs/next", timeout=10)
     except httpx.RequestError as e:
         typer.echo(f"Error: could not reach server: {e}. Retrying in {JOB_POLL_INTERVAL}s...", err=True)
         return False
     if res.status_code == 401:
         typer.echo("Error: authentication failed. Re-run: rikis login --token <token>", err=True)
+        raise typer.Exit(1)
+    if res.status_code == 426:
+        typer.echo(f"Error: {get_detail(res)}", err=True)
         raise typer.Exit(1)
     if not res.is_success:
         typer.echo(f"Error: server returned {res.status_code}. Retrying in {JOB_POLL_INTERVAL}s...", err=True)
@@ -93,12 +96,13 @@ def _pull_and_run_job(server_url: str, auth: dict, runtimes: dict[str, Runtime])
         typer.echo(f"  [{i}/{len(job['sub_jobs'])}]{id_str} {label}")
 
         start_res = _post_with_retry(
+            client,
             f"{server_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/start",
-            label="could not start sub-job", headers=auth, timeout=10,
+            label="could not start sub-job", timeout=10,
         )
         if start_res is None or not start_res.is_success:
             if start_res and start_res.status_code == 404:
-                job_res = httpx.get(f"{server_url}/api/jobs/{job['id']}", headers=auth, timeout=10)
+                job_res = client.get(f"{server_url}/api/jobs/{job['id']}", timeout=10)
                 if not job_res.is_success:
                     typer.echo(f"  job {job['id']} no longer exists, aborting", err=True)
             break
@@ -144,8 +148,9 @@ def _pull_and_run_job(server_url: str, auth: dict, runtimes: dict[str, Runtime])
             history.append({"role": "assistant", "content": assistant_content})
 
         result_res = _post_with_retry(
+            client,
             f"{server_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/result",
-            label="could not submit result", json=result, headers=auth, timeout=10,
+            label="could not submit result", json=result, timeout=10,
         )
         if result_res is None or not result_res.is_success:
             if result_res and result_res.status_code == 404:
