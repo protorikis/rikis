@@ -4,7 +4,7 @@
 import socket
 import httpx
 import typer
-from rikis import config as cfg, agent
+from rikis import config as cfg, agent, update
 from rikis.client import create_client, get_detail
 from rikis.runtimes import create_runtime, RUNTIME_TYPES
 
@@ -65,6 +65,7 @@ def config(
 @app.command()
 def start():
     """Start the rikis agent (pulls jobs from server and runs them)."""
+    update.check_for_update()
     token = cfg.load_token()
     if not token:
         typer.echo("Not logged in. Run: rikis login --token <token>", err=True)

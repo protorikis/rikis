@@ -150,7 +150,7 @@ def _pull_and_run_job(client: httpx.Client, server_url: str, runtimes: dict[str,
         result_res = _post_with_retry(
             client,
             f"{server_url}/api/jobs/{job['id']}/sub_jobs/{sub_job['id']}/result",
-            label="could not submit result", json=result, timeout=10,
+            label="could not submit result", json=result, timeout=30,
         )
         if result_res is None or not result_res.is_success:
             if result_res and result_res.status_code == 404:
