@@ -5,12 +5,13 @@ import json
 import time
 from datetime import datetime
 from importlib.metadata import version
-from pathlib import Path
 
 import httpx
 import typer
 
-_CACHE_PATH = Path.home() / ".rikis" / "update_cache.json"
+from rikis.config import CONFIG_DIR
+
+_CACHE_PATH = CONFIG_DIR / "update_cache.json"
 _CHECK_INTERVAL = 86400  # 24 hours
 
 
@@ -29,7 +30,7 @@ def check_for_update() -> None:
             _CACHE_PATH.write_text(json.dumps({"checked_at": now, "latest_version": latest}))
 
         current = version("rikis")
-        if latest and latest != current:
+        if latest and tuple(int(x) for x in latest.split(".")) > tuple(int(x) for x in current.split(".")):
             typer.echo(f"A new version of rikis is available: {current} → {latest}. Run: pipx upgrade rikis", err=True)
     except Exception:
         pass

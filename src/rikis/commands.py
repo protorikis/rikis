@@ -107,6 +107,7 @@ def status():
     token = cfg.load_token()
     runtimes = cfg.load_runtimes()
     typer.echo("Logged in." if token else "Not logged in.")
+    typer.echo(f"Server: {cfg.load_server_url()}")
     if runtimes:
         typer.echo(f"{len(runtimes)} runtime(s) configured:")
         for r in runtimes:

@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import os
 from pathlib import Path
 
-CONFIG_PATH = Path.home() / ".rikis" / "config.json"
+CONFIG_DIR = Path(os.environ.get("RIKIS_CONFIG_DIR", Path.home() / ".rikis"))
+CONFIG_PATH = CONFIG_DIR / "config.json"
 
 DEFAULT_SERVER_URL = "https://bench.protorikis.com"
 
