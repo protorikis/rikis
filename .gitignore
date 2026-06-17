@@ -20,3 +20,11 @@ wheels/
 # Env / secrets
 .env
 .env.local
+
+# Deployment
+Lib/
+Scripts/
+.Lock
+*.TAG
+*.json
+*.cfg
