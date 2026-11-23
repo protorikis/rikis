@@ -20,8 +20,13 @@ class LLMResult:
 
 
 class Runtime(ABC):
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, api_key: str | None = None):
         self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
 
     @abstractmethod
     def list_models(self) -> list[str]: ...
@@ -55,7 +60,7 @@ class Runtime(ABC):
         response_parts: list[str] = []
         reasoning_parts: list[str] = []
 
-        with httpx.stream("POST", f"{self.base_url}/v1/chat/completions", json=payload, timeout=None) as resp:
+        with httpx.stream("POST", f"{self.base_url}/v1/chat/completions", json=payload, headers=self.headers, timeout=None) as resp:
             resp.raise_for_status()
             for raw_line in resp.iter_lines():
                 line = raw_line.strip()

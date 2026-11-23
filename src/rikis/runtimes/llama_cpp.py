@@ -7,7 +7,7 @@ from rikis.runtimes.base import Runtime, LLMResult
 
 class LlamaCppRuntime(Runtime):
     def list_models(self) -> list[str]:
-        resp = httpx.get(f"{self.base_url}/v1/models", timeout=10)
+        resp = httpx.get(f"{self.base_url}/v1/models", headers=self.headers, timeout=10)
         resp.raise_for_status()
         return [m["id"] for m in resp.json().get("data", [])]
 

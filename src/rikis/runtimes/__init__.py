@@ -13,8 +13,8 @@ RUNTIME_TYPES: dict[str, type[Runtime]] = {
 }
 
 
-def create_runtime(type: str, url: str) -> Runtime:
+def create_runtime(type: str, url: str, api_key: str | None = None) -> Runtime:
     cls = RUNTIME_TYPES.get(type)
     if not cls:
         raise ValueError(f"Unknown runtime type: {type!r}. Available: {', '.join(RUNTIME_TYPES)}")
-    return cls(url)
+    return cls(url, api_key=api_key)

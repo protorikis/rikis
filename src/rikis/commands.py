@@ -40,6 +40,7 @@ def config(
     add_runtime: str = typer.Option(None, "--add-runtime", help=f"Add a runtime. Type: {', '.join(RUNTIME_TYPES)}"),
     remove_runtime: str = typer.Option(None, "--remove-runtime", help="Remove a runtime by URL"),
     url: str = typer.Option(None, "--url", help="Runtime base URL (e.g. http://localhost:11434)"),
+    api_key: str = typer.Option(None, "--api-key", help="Runtime API key"),
 ):
     """Configure rikis."""
     if add_runtime is not None:
@@ -49,7 +50,7 @@ def config(
         if add_runtime not in RUNTIME_TYPES:
             typer.echo(f"Unknown runtime type '{add_runtime}'. Available: {', '.join(RUNTIME_TYPES)}", err=True)
             raise typer.Exit(1)
-        cfg.add_runtime(add_runtime, url)
+        cfg.add_runtime(add_runtime, url, api_key=api_key)
         typer.echo(f"Runtime added: {add_runtime} @ {url}")
         return
     if remove_runtime is not None:
@@ -76,7 +77,7 @@ def start():
         typer.echo("No runtimes configured. Run: rikis config --add-runtime <type> --url <url>", err=True)
         raise typer.Exit(1)
 
-    runtimes: dict = {rc["url"]: create_runtime(rc["type"], rc["url"]) for rc in runtime_configs}
+    runtimes: dict = {rc["url"]: create_runtime(rc["type"], rc["url"], rc.get("api_key")) for rc in runtime_configs}
 
     profiles = []
     typer.echo("Checking runtimes...")
