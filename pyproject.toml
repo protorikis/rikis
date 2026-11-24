@@ -1,6 +1,6 @@
 [project]
 name = "rikis"
-version = "0.0.4"
+version = "0.0.5"
 description = "Lightweight agent that pulls and runs LLM benchmarks from Protorikis Bench"
 readme = "README.md"
 authors = [
