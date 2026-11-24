@@ -3,7 +3,6 @@
 
 import json
 import time
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import httpx
@@ -19,7 +18,9 @@ class LLMResult:
     tokens_per_second: float
 
 
-class Runtime(ABC):
+class Runtime:
+    """A runtime that speaks the OpenAI-compatible API. Subclasses override only what differs."""
+
     def __init__(self, base_url: str, api_key: str | None = None):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -28,11 +29,13 @@ class Runtime(ABC):
     def headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
 
-    @abstractmethod
-    def list_models(self) -> list[str]: ...
+    def list_models(self) -> list[str]:
+        resp = httpx.get(f"{self.base_url}/v1/models", headers=self.headers, timeout=10)
+        resp.raise_for_status()
+        return [m["id"] for m in resp.json().get("data", [])]
 
-    @abstractmethod
-    def run_prompt(self, prompt: str, model: str, *, temperature: float | None = None, thinking: bool = True, preserve_thinking: bool | None = None, history: list | None = None) -> LLMResult: ...
+    def run_prompt(self, prompt: str, model: str, *, temperature: float | None = None, thinking: bool = True, preserve_thinking: bool | None = None, history: list | None = None) -> LLMResult:
+        return self._openai_stream(prompt, model, temperature=temperature, thinking=thinking, preserve_thinking=preserve_thinking, history=history)
 
     def _openai_stream(self, prompt: str, model: str, *, temperature: float | None = None, thinking: bool = True, preserve_thinking: bool | None = None, history: list | None = None, extra_messages: list | None = None) -> LLMResult:
         messages = (history or []) + [{"role": "user", "content": prompt}]

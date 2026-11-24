@@ -1,15 +1,8 @@
 # Copyright 2026 Protorikis
 # SPDX-License-Identifier: Apache-2.0
 
-import httpx
-from rikis.runtimes.base import Runtime, LLMResult
+from rikis.runtimes.base import Runtime
 
 
 class LlamaCppRuntime(Runtime):
-    def list_models(self) -> list[str]:
-        resp = httpx.get(f"{self.base_url}/v1/models", headers=self.headers, timeout=10)
-        resp.raise_for_status()
-        return [m["id"] for m in resp.json().get("data", [])]
-
-    def run_prompt(self, prompt: str, model: str, *, temperature: float | None = None, thinking: bool = True, preserve_thinking: bool | None = None, history: list | None = None) -> LLMResult:
-        return self._openai_stream(prompt, model, temperature=temperature, thinking=thinking, preserve_thinking=preserve_thinking, history=history)
+    """llama.cpp server: the standard OpenAI-compatible API, nothing to override."""
