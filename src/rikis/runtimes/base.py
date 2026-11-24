@@ -42,6 +42,7 @@ class Runtime(ABC):
             "model": model,
             "messages": messages,
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
         chat_template_kwargs: dict = {}
         if not thinking:
@@ -56,7 +57,8 @@ class Runtime(ABC):
 
         t_start = time.time()
         t_first_token: float | None = None
-        token_count = 0
+        token_count = 0  # streamed chunks with text; fallback when the server reports no usage
+        reported_tokens: int | None = None
         response_parts: list[str] = []
         reasoning_parts: list[str] = []
 
@@ -73,7 +75,10 @@ class Runtime(ABC):
                     chunk = json.loads(data)
                 except json.JSONDecodeError:
                     continue
-                delta = chunk.get("choices", [{}])[0].get("delta", {})
+                usage = chunk.get("usage")
+                if usage and usage.get("completion_tokens") is not None:
+                    reported_tokens = usage["completion_tokens"]
+                delta = (chunk.get("choices") or [{}])[0].get("delta", {})
                 reasoning = delta.get("reasoning_content") or delta.get("reasoning") or ""
                 content = delta.get("content") or ""
                 if reasoning:
@@ -90,13 +95,14 @@ class Runtime(ABC):
         t_end = time.time()
         ttft = (t_first_token - t_start) if t_first_token else 0.0
         gen_time = (t_end - t_first_token) if t_first_token else 0.0
-        tps = (token_count / gen_time) if gen_time > 0 else 0.0
+        tokens = reported_tokens if reported_tokens is not None else token_count
+        tps = (tokens / gen_time) if gen_time > 0 else 0.0
 
         return LLMResult(
             response="".join(response_parts),
             reasoning="".join(reasoning_parts),
             ttft_seconds=ttft,
             generation_seconds=gen_time,
-            tokens_generated=token_count,
+            tokens_generated=tokens,
             tokens_per_second=tps,
         )
