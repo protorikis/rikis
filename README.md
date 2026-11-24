@@ -24,6 +24,7 @@ rikis login --token <token>
 rikis config --add-runtime ollama --url http://localhost:11434
 rikis config --add-runtime llama.cpp --url http://localhost:8080
 rikis config --add-runtime lmstudio --url http://localhost:1234
+rikis config --add-runtime omlx --url http://localhost:8000
 ```
 
 If the runtime requires an API key, add `--api-key`:
